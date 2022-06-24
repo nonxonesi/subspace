@@ -420,17 +420,14 @@ async fn test_dsn_sync() {
         .unwrap()
     });
 
-    let mut node_runners = seeder_multi_farming
-        .single_plot_farms
-        .iter_mut()
-        .filter_map(|farming| farming.node_runner.take())
-        .map(NodeRunner::run)
-        .collect::<FuturesUnordered<_>>();
+    let node_runners = futures::future::join_all(
+        std::mem::take(&mut seeder_multi_farming.networking_node_runners)
+            .into_iter()
+            .map(NodeRunner::run),
+    );
     let (seeder_wait_sender, seeder_wait_receiver) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
-        while let Some(()) = node_runners.next().await {
-            break;
-        }
+        node_runners.await;
         seeder_multi_farming.wait().await.unwrap();
         seeder_wait_sender.send(()).unwrap();
     });
@@ -476,17 +473,14 @@ async fn test_dsn_sync() {
         .await
         .unwrap();
 
-        let mut node_runners = syncer_multi_farming
-            .single_plot_farms
-            .iter_mut()
-            .filter_map(|farming| farming.node_runner.take())
-            .map(NodeRunner::run)
-            .collect::<FuturesUnordered<_>>();
+        let node_runners = futures::future::join_all(
+            std::mem::take(&mut syncer_multi_farming.networking_node_runners)
+                .into_iter()
+                .map(NodeRunner::run),
+        );
         let (syncer_wait_sender, syncer_wait_receiver) = tokio::sync::oneshot::channel();
         tokio::spawn(async move {
-            while let Some(()) = node_runners.next().await {
-                break;
-            }
+            node_runners.await;
             syncer_wait_sender.send(()).unwrap();
         });
 
@@ -512,18 +506,18 @@ async fn test_dsn_sync() {
             } = result.unwrap();
 
             assert!(Range {
-                start: expected_start * 9 / 10,
-                end: expected_start * 11 / 10,
+                start: expected_start / 10 * 9,
+                end: expected_start / 10 * 11,
             }
             .contains(&start));
             assert!(Range {
-                start: expected_end * 9 / 10,
-                end: expected_end * 11 / 10,
+                start: expected_end / 10 * 9,
+                end: expected_end / 10 * 11,
             }
             .contains(&end));
             assert!(Range {
-                start: total_pieces * 9 / 10,
-                end: total_pieces * 11 / 10,
+                start: total_pieces / 10 * 9,
+                end: total_pieces / 10 * 11,
             }
             .contains(&total_pieces));
         }
